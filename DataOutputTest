@@ -1,0 +1,67 @@
+#include <Wire.h>
+#include "Adafruit_BNO08x.h"
+
+Adafruit_BNO08x bno08x;
+unsigned long lastUpdate = 0;  // Time tracking variable
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial);
+  Serial.println(F("Starting BNO085 IMU..."));
+
+  Wire.begin();  // Initialize I2C
+
+  // RESET THE SENSOR BEFORE INITIALIZATION (using pin 5 as reset)
+  pinMode(5, OUTPUT);
+  digitalWrite(5, LOW);
+  delay(10);  // Hold reset low for 10ms
+  digitalWrite(5, HIGH);
+  delay(10);  // Wait before initialization
+
+  // Try initializing with explicit I2C address (0x4A)
+  if (!bno08x.begin_I2C(0x4A)) {
+    Serial.println(F("Failed to detect BNO085 at 0x4A! Running I2C scanner..."));
+    scanI2C();  // Run I2C scanner to check for conflicts
+    while (1);  // Stop execution if sensor is not found
+  }
+
+  Serial.println(F("BNO085 found!"));
+
+  // Enable rotation vector with 100Hz update rate (10ms interval)
+  bno08x.enableReport(SH2_ROTATION_VECTOR, 10000);
+}
+
+// Function to scan I2C devices
+void scanI2C() {
+  Serial.println(F("Scanning I2C bus..."));
+  for (byte address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    if (Wire.endTransmission() == 0) {
+      Serial.print(F("Found device at 0x"));
+      Serial.println(address, HEX);
+    }
+  }
+  Serial.println(F("I2C scan complete."));
+}
+
+void loop() {
+  sh2_SensorValue_t sensorValue;
+
+  if (bno08x.getSensorEvent(&sensorValue)) {  // Read sensor event
+    unsigned long now = millis();
+
+    if (now - lastUpdate > 10) {  // Update every 10ms (100Hz)
+      lastUpdate = now;  // Update timestamp
+
+      Serial.print(F("Quaternion: "));
+      Serial.print(sensorValue.un.rotationVector.real);
+      Serial.print(F(", "));
+      Serial.print(sensorValue.un.rotationVector.i);
+      Serial.print(F(", "));
+      Serial.print(sensorValue.un.rotationVector.j);
+      Serial.print(F(", "));
+      Serial.print(sensorValue.un.rotationVector.k);
+      Serial.println();
+    }
+  }
+}
